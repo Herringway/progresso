@@ -1,0 +1,13 @@
+{
+	"authors": [
+		"Herringway"
+	],
+	"copyright": "Copyright © 2022, Herringway",
+	"description": ".",
+	"dependencies": {
+		"magicalrainbows": "~>0.0"
+	},
+	"dflags": ["-preview=dip1000"],
+	"license": "BSL-1.0",
+	"name": "progresso"
+}
