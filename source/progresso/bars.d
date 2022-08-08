@@ -2,27 +2,6 @@ module progresso.bars;
 
 import std.stdio;
 
-struct Stage {
-	string name;
-}
-
-struct ProgressBar {
-	Stage[] stages;
-	void printProgress(Progress progress) @safe {
-		if (progress.step == progress.total) {
-			writefln("\u001b[2K\r%s: Complete!", stages[progress.stage].name);
-		} else if ((progress.step % 1000) == 0) {
-			writef!"\u001b[2K\r%s - %s (%s%%)"(stages[progress.stage].name, progress.step, 100.0 * cast(double)progress.step / cast(double)progress.total);
-		}
-	}
-}
-
-struct Progress {
-	size_t stage;
-	size_t step;
-	size_t total;
-}
-
 enum ColourMode {
 	none,
 	time,
