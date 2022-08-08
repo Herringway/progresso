@@ -17,13 +17,13 @@ struct ProgressTracker {
 	bool totalItemsOnly;
 	private ProgressItem total = { name: "Total", bar: { width: 10, showPercentage: true } };
 	private uint rewindAmount;
-	void addNewItem(size_t id) @safe {
+	void addNewItem(size_t id) @safe pure {
 		auto item = ProgressItem();
 		item.bar.width = 10;
 		item.bar.showPercentage = true;
 		items[id] = item;
 	}
-	size_t addNewItem() @safe {
+	size_t addNewItem() @safe pure {
 		auto item = ProgressItem();
 		item.bar.width = 10;
 		item.bar.showPercentage = true;
@@ -35,29 +35,29 @@ struct ProgressTracker {
 		}
 		assert(0);
 	}
-	void setItemStatus(size_t id, string status) @safe
+	void setItemStatus(size_t id, string status) @safe pure
 		in(id in items, "Progress item not found")
 	{
 		items[id].status = status;
 	}
-	void setItemName(size_t id, string name) @safe
+	void setItemName(size_t id, string name) @safe pure
 		in(id in items, "Progress item not found")
 	{
 		items[id].name = name;
 	}
-	void setItemMaximum(size_t id, ulong amount) @safe
+	void setItemMaximum(size_t id, ulong amount) @safe pure
 		in(id in items, "Progress item not found")
 	{
 		items[id].bar.max = amount;
 		updateTotal();
 	}
-	void setItemProgress(size_t id, ulong amount) @safe
+	void setItemProgress(size_t id, ulong amount) @safe pure
 		in(id in items, "Progress item not found")
 	{
 		items[id].bar.current = amount;
 		updateTotal();
 	}
-	void addItemProgress(size_t id, ulong amount) @safe
+	void addItemProgress(size_t id, ulong amount) @safe pure
 		in(id in items, "Progress item not found")
 	{
 		items[id].bar.current += amount;
@@ -65,12 +65,12 @@ struct ProgressTracker {
 			total.bar.current += amount;
 		}
 	}
-	void setItemActive(size_t id) @safe
+	void setItemActive(size_t id) @safe pure
 		in(id in items, "Progress item not found")
 	{
 		active ~= id;
 	}
-	void completeItem(size_t id) @safe
+	void completeItem(size_t id) @safe pure
 		in(id in items, "Progress item not found")
 	{
 		import std.algorithm.mutation : remove;
@@ -102,7 +102,7 @@ struct ProgressTracker {
 			writeln(total.bar, " - ", total.name, " (", total.status, ")");
 		}
 	}
-	private void updateTotal() @safe {
+	private void updateTotal() @safe pure {
 		total.bar.max = 0;
 		total.bar.current = 0;
 		foreach (const item; items) {
