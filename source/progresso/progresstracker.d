@@ -117,6 +117,11 @@ struct ProgressTracker {
 			}
 		}
 	}
+	void clear() @safe pure {
+		items = null;
+		active = [];
+		done = [];
+	}
 }
 
 unittest {
