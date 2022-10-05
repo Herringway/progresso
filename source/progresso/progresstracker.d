@@ -77,13 +77,15 @@ struct ProgressTracker {
 		import std.algorithm.mutation : remove;
 		import std.algorithm.searching : countUntil;
 		const idx = active.countUntil(id);
-		active = remove(active, idx);
-		done ~= id;
-		items[id].complete = true;
-		if (items[id].bar.max == 0) {
-			items[id].bar.max = 1;
+		if (idx != -1) {
+			active = remove(active, idx);
+			done ~= id;
+			if (items[id].bar.max == 0) {
+				items[id].bar.max = 1;
+			}
+			items[id].bar.current = items[id].bar.max;
 		}
-		items[id].bar.current = items[id].bar.max;
+		items[id].complete = true;
 		if (totalItemsOnly) {
 			total.bar.current++;
 		}
