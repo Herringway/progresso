@@ -88,9 +88,11 @@ struct ProgressTracker {
 		}
 	}
 	void updateDisplay() @safe {
-		import std.stdio : writef, writeln;
+		import std.stdio : write, writeln;
 		if (rewindAmount > 0) {
-			writef("\x1B[%dF", rewindAmount);
+			foreach (_; 0 ..rewindAmount) {
+				write("\x1B[1F\x1B[2K");
+			}
 		}
 		rewindAmount = 0;
 		foreach (id; done) {
