@@ -14,19 +14,20 @@ struct ProgressTracker {
 	private size_t[] active;
 	private size_t[] done;
 	bool showTotal;
+	bool hideProgress;
 	bool totalItemsOnly;
-	private ProgressItem total = { name: "Total", bar: { width: 10, showPercentage: true } };
+	private ProgressItem total = { name: "Total", bar: { width: 10, showPercentage: false } };
 	private uint rewindAmount;
 	void addNewItem(size_t id) @safe pure {
 		auto item = ProgressItem();
 		item.bar.width = 10;
-		item.bar.showPercentage = true;
+		item.bar.showPercentage = false;
 		items[id] = item;
 	}
 	size_t addNewItem() @safe pure {
 		auto item = ProgressItem();
 		item.bar.width = 10;
-		item.bar.showPercentage = true;
+		item.bar.showPercentage = false;
 		foreach(id; 0 .. size_t.max) {
 			if (id !in items) {
 				items[id] = item;
@@ -89,6 +90,24 @@ struct ProgressTracker {
 	}
 	void updateDisplay() @safe {
 		import std.stdio : write, writeln;
+		void printBar(const ProgressItem item, bool advance) {
+			if (advance) {
+				rewindAmount++;
+			}
+			write(item.bar);
+			write(" ");
+			if (!hideProgress) {
+				write(item.bar.current, "/", item.bar.max, " (");
+			}
+			write(item.bar.percentage);
+			if (!hideProgress) {
+				write(")");
+			}
+			write(" - ", item.name);
+			write(" (", item.status, ")");
+			writeln();
+
+		}
 		if (rewindAmount > 0) {
 			foreach (_; 0 ..rewindAmount) {
 				write("\x1B[1F\x1B[2K");
@@ -96,16 +115,14 @@ struct ProgressTracker {
 		}
 		rewindAmount = 0;
 		foreach (id; done) {
-			writeln(items[id].bar, " - ", items[id].name, " (", items[id].status, ")");
+			printBar(items[id], false);
 		}
 		done = [];
 		foreach (id; active) {
-			rewindAmount++;
-			writeln(items[id].bar, " - ", items[id].name, " (", items[id].status, ")");
+			printBar(items[id], true);
 		}
 		if (showTotal) {
-			rewindAmount++;
-			writeln(total.bar, " - ", total.name, " (", total.status, ")");
+			printBar(total, true);
 		}
 	}
 	private void updateTotal() @safe pure {

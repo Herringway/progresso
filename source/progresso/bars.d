@@ -8,7 +8,7 @@ enum ColourMode {
 	space
 }
 
-void printPercentage(S)(auto ref S sink, ulong current, ulong max) {
+private void printPercentage(S)(auto ref S sink, ulong current, ulong max) {
 	import std.format : formattedWrite;
 	sink.formattedWrite!"%02.2f%%"((cast(double)current / cast(double)max) * 100.0);
 }
@@ -22,7 +22,7 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 	RGB888 from;
 	RGB888 to;
 	bool showPercentage;
-	void toString(S)(auto ref S sink) {
+	void toString(S)(auto ref S sink) const {
 		import std.algorithm.comparison : min;
 		import std.format : formattedWrite;
 		import std.math : ceil, floor;
@@ -48,9 +48,18 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 		}
 		put(sink, rightChar);
 		if (showPercentage && (max > 0)) {
-			put(sink, " ");
-			printPercentage(sink, current, max);
+			sink.formattedWrite!" %s"(percentage());
 		}
+	}
+	auto percentage() const {
+		static struct Result {
+			ulong current;
+			ulong max;
+			void toString(S)(auto ref S sink) const {
+				printPercentage(sink, current, max);
+			}
+		}
+		return Result(current, max);
 	}
 	void ___() {
 		import std.range : NullSink;
