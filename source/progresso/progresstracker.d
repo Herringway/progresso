@@ -107,7 +107,9 @@ struct ProgressTracker {
 				write(")");
 			}
 			write(" - ", item.name);
-			write(" (", item.status, ")");
+			if (item.status != "") {
+				write(" (", item.status, ")");
+			}
 			writeln();
 
 		}
