@@ -130,7 +130,7 @@ struct ProgressTracker {
 	}
 }
 
-unittest {
+private void demo() {
 	import core.thread;
 	import core.time;
 	import std.conv : text;
