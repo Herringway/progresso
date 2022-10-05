@@ -89,6 +89,7 @@ struct ProgressTracker {
 		if (totalItemsOnly) {
 			total.bar.current++;
 		}
+		updateTotal();
 	}
 	void updateDisplay() @safe {
 		import std.stdio : write, writeln;
@@ -140,6 +141,9 @@ struct ProgressTracker {
 				total.bar.max += item.bar.max;
 				total.bar.current += item.bar.current;
 			}
+		}
+		if (total.bar.current == total.bar.max) {
+			total.status = "Complete";
 		}
 	}
 	void clear() @safe pure {
