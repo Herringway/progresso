@@ -15,7 +15,8 @@ struct ProgressTracker {
 	private size_t[] active;
 	private size_t[] done;
 	bool showTotal;
-	bool hideProgress;
+	bool hideItemProgress;
+	bool hideTotalProgress;
 	bool totalItemsOnly;
 	private ProgressItem total = { name: "Total", bar: { width: 10, showPercentage: false } };
 	private uint rewindAmount;
@@ -92,7 +93,7 @@ struct ProgressTracker {
 	}
 	void updateDisplay() @safe {
 		import std.stdio : write, writeln;
-		void printBar(const ProgressItem item, bool advance) {
+		void printBar(const ProgressItem item, bool advance, bool hideProgress) {
 			if (advance) {
 				rewindAmount++;
 			}
@@ -119,14 +120,14 @@ struct ProgressTracker {
 		}
 		rewindAmount = 0;
 		foreach (id; done) {
-			printBar(items[id], false);
+			printBar(items[id], false, hideItemProgress);
 		}
 		done = [];
 		foreach (id; active) {
-			printBar(items[id], true);
+			printBar(items[id], true, hideItemProgress);
 		}
 		if (showTotal) {
-			printBar(total, true);
+			printBar(total, true, hideTotalProgress);
 		}
 	}
 	private void updateTotal() @safe pure {
