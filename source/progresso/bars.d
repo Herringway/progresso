@@ -22,6 +22,7 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 	RGB888 from;
 	RGB888 to;
 	bool showPercentage;
+	bool complete;
 	void toString(S)(auto ref S sink) const {
 		import std.algorithm.comparison : min;
 		import std.format : formattedWrite;
@@ -36,7 +37,8 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 		if (colourMode == ColourMode.time) {
 			sink.formattedWrite!"\x1B[38;2;%d;%d;%dm"(gradient.front.red, gradient.front.green, gradient.front.blue);
 		}
-		const filled = cast(ulong)floor(width * cast(double)current/cast(double)max);
+		const percentFilled = complete ? 1.0 : cast(double)current/cast(double)max;
+		const filled = cast(ulong)floor(width * percentFilled);
 		put(sink, characters[$ - 1].repeat(filled));
 		if (width > filled) {
 			const medFilled = (cast(double)width * cast(double)current/cast(double)max) % 1.0;
@@ -47,7 +49,7 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 			put(sink, "\x1B[0m");
 		}
 		put(sink, rightChar);
-		if (showPercentage && (max > 0)) {
+		if (showPercentage) {
 			sink.formattedWrite!" %s"(percentage());
 		}
 	}
@@ -55,11 +57,19 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 		static struct Result {
 			ulong current;
 			ulong max;
+			bool complete;
 			void toString(S)(auto ref S sink) const {
-				printPercentage(sink, current, max);
+				import std.format : formattedWrite;
+				if (complete) {
+					sink.formattedWrite!"%02.2f%%"(100);
+				} else if (max == 0) {
+					sink.formattedWrite!"%02.2f%%"(0);
+				} else {
+					printPercentage(sink, current, max);
+				}
 			}
 		}
-		return Result(current, max);
+		return Result(current, max, complete);
 	}
 	void ___() {
 		import std.range : NullSink;

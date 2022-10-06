@@ -80,9 +80,7 @@ struct ProgressTracker {
 		if (idx != -1) {
 			active = remove(active, idx);
 			done ~= id;
-			if (items[id].bar.max == 0) {
-				items[id].bar.max = 1;
-			}
+			items[id].bar.complete = true;
 			items[id].bar.current = items[id].bar.max;
 		}
 		items[id].complete = true;
