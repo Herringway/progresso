@@ -1,5 +1,6 @@
 module progresso.progresstracker;
 
+public import magicalrainbows : RGB = RGB888;
 import progresso.bars;
 
 private struct ProgressItem {
@@ -150,6 +151,16 @@ struct ProgressTracker {
 		items = null;
 		active = [];
 		done = [];
+	}
+	void setTotalColours(RGB from, RGB to, ColourMode mode = ColourMode.time) @safe pure {
+		total.bar.from = from;
+		total.bar.to = to;
+		total.bar.colourMode = mode;
+	}
+	void setItemColours(size_t idx, RGB from, RGB to, ColourMode mode = ColourMode.time) @safe pure {
+		items[idx].bar.from = from;
+		items[idx].bar.to = to;
+		items[idx].bar.colourMode = mode;
 	}
 }
 
