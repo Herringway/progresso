@@ -4,8 +4,8 @@ import std.stdio;
 
 enum ColourMode {
 	none,
+	unchanging,
 	time,
-	space
 }
 
 private void printPercentage(S)(auto ref S sink, ulong current, ulong max) {
@@ -36,6 +36,8 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 		put(sink, leftChar);
 		if (colourMode == ColourMode.time) {
 			sink.formattedWrite!"\x1B[38;2;%d;%d;%dm"(gradient.front.red, gradient.front.green, gradient.front.blue);
+		} else if (colourMode == ColourMode.unchanging) {
+			sink.formattedWrite!"\x1B[38;2;%d;%d;%dm"(from.red, from.green, from.blue);
 		}
 		const percentFilled = complete ? 1.0 : cast(double)current/cast(double)max;
 		const filled = cast(ulong)floor(width * percentFilled);
@@ -45,7 +47,7 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 			put(sink, characters[min(characters.length - 1, cast(size_t)floor(medFilled * characters.length))]);
 			put(sink, characters[0].repeat(width - filled - 1));
 		}
-		if (colourMode == ColourMode.time) {
+		if (colourMode != ColourMode.none) {
 			put(sink, "\x1B[0m");
 		}
 		put(sink, rightChar);
