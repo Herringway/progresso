@@ -13,7 +13,7 @@ private void printPercentage(S)(auto ref S sink, ulong current, ulong max) {
 	sink.formattedWrite!"%02.2f%%"((cast(double)current / cast(double)max) * 100.0);
 }
 
-struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters) {
+struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar unknownChar, dchar[] characters) {
 	import magicalrainbows;
 	ulong current;
 	ulong maximum;
@@ -39,13 +39,17 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 		} else if (colourMode == ColourMode.unchanging) {
 			sink.formattedWrite!"\x1B[38;2;%d;%d;%dm"(from.red, from.green, from.blue);
 		}
-		const percentFilled = complete ? 1.0 : clamp(cast(double)current/cast(double)maximum, 0.0, 1.0);
-		const filled = cast(ulong)floor(width * percentFilled);
-		put(sink, characters[$ - 1].repeat(filled));
-		if (width > filled) {
-			const medFilled = (cast(double)width * cast(double)current/cast(double)maximum) % 1.0;
-			put(sink, characters[min(characters.length - 1, cast(size_t)floor(medFilled * characters.length))]);
-			put(sink, characters[0].repeat(width - filled - 1));
+		if ((current > 0) && (maximum == 0)) {
+			put(sink, unknownChar.repeat(width));
+		} else {
+			const percentFilled = complete ? 1.0 : clamp(cast(double)current/cast(double)maximum, 0.0, 1.0);
+			const filled = cast(ulong)floor(width * percentFilled);
+			put(sink, characters[$ - 1].repeat(filled));
+			if (width > filled) {
+				const medFilled = (cast(double)width * cast(double)current/cast(double)maximum) % 1.0;
+				put(sink, characters[min(characters.length - 1, cast(size_t)floor(medFilled * characters.length))]);
+				put(sink, characters[0].repeat(width - filled - 1));
+			}
 		}
 		if (colourMode != ColourMode.none) {
 			put(sink, "\x1B[0m");
@@ -80,9 +84,9 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 	}
 }
 
-alias UnicodeProgressBar = CharacterProgressBar!('[', ']', ['░', '▒', '▓', '█']);
-alias UnicodeProgressBar2 = CharacterProgressBar!('[', ']', [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']);
-alias AsciiProgressBar = CharacterProgressBar!('[', ']', [' ', '#']);
+alias UnicodeProgressBar = CharacterProgressBar!('[', ']', '▚', ['░', '▒', '▓', '█']);
+alias UnicodeProgressBar2 = CharacterProgressBar!('[', ']', '▒', [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']);
+alias AsciiProgressBar = CharacterProgressBar!('[', ']', '?', [' ', '#']);
 
 @safe pure unittest {
 	import std.conv : text;
@@ -101,6 +105,7 @@ alias AsciiProgressBar = CharacterProgressBar!('[', ']', [' ', '#']);
 	assert(UnicodeProgressBar(57, 100, 10).text == "[█████▓░░░░]");
 	assert(UnicodeProgressBar(99, 100, 10).text == "[██████████]");
 	assert(UnicodeProgressBar(200, 100, 10).text == "[██████████]");
+	assert(UnicodeProgressBar(50, 0, 10).text == "[▚▚▚▚▚▚▚▚▚▚]");
 }
 
 @safe pure unittest {
