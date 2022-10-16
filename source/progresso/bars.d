@@ -16,7 +16,7 @@ private void printPercentage(S)(auto ref S sink, ulong current, ulong max) {
 struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters) {
 	import magicalrainbows;
 	ulong current;
-	ulong max;
+	ulong maximum;
 	ulong width;
 	ColourMode colourMode;
 	RGB888 from;
@@ -24,13 +24,13 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 	bool showPercentage;
 	bool complete;
 	void toString(S)(auto ref S sink) const {
-		import std.algorithm.comparison : min;
+		import std.algorithm.comparison : clamp, min;
 		import std.format : formattedWrite;
 		import std.math : ceil, floor;
 		import std.range : popFrontN, put, repeat;
 		Gradient gradient;
 		if (colourMode == ColourMode.time) {
-			gradient = Gradient(from, to, max);
+			gradient = Gradient(from, to, maximum);
 			gradient.popFrontN(current);
 		}
 		put(sink, leftChar);
@@ -39,11 +39,11 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 		} else if (colourMode == ColourMode.unchanging) {
 			sink.formattedWrite!"\x1B[38;2;%d;%d;%dm"(from.red, from.green, from.blue);
 		}
-		const percentFilled = complete ? 1.0 : cast(double)current/cast(double)max;
+		const percentFilled = complete ? 1.0 : clamp(cast(double)current/cast(double)maximum, 0.0, 1.0);
 		const filled = cast(ulong)floor(width * percentFilled);
 		put(sink, characters[$ - 1].repeat(filled));
 		if (width > filled) {
-			const medFilled = (cast(double)width * cast(double)current/cast(double)max) % 1.0;
+			const medFilled = (cast(double)width * cast(double)current/cast(double)maximum) % 1.0;
 			put(sink, characters[min(characters.length - 1, cast(size_t)floor(medFilled * characters.length))]);
 			put(sink, characters[0].repeat(width - filled - 1));
 		}
@@ -58,20 +58,20 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar[] characters)
 	auto percentage() const {
 		static struct Result {
 			ulong current;
-			ulong max;
+			ulong maximum;
 			bool complete;
 			void toString(S)(auto ref S sink) const {
 				import std.format : formattedWrite;
 				if (complete) {
 					sink.formattedWrite!"%02.2f%%"(100);
-				} else if (max == 0) {
+				} else if (maximum == 0) {
 					sink.formattedWrite!"%02.2f%%"(0);
 				} else {
-					printPercentage(sink, current, max);
+					printPercentage(sink, current, maximum);
 				}
 			}
 		}
-		return Result(current, max, complete);
+		return Result(current, maximum, complete);
 	}
 	void ___() {
 		import std.range : NullSink;
@@ -100,6 +100,7 @@ alias AsciiProgressBar = CharacterProgressBar!('[', ']', [' ', '#']);
 	assert(UnicodeProgressBar(53, 100, 10).text == "[█████▒░░░░]");
 	assert(UnicodeProgressBar(57, 100, 10).text == "[█████▓░░░░]");
 	assert(UnicodeProgressBar(99, 100, 10).text == "[██████████]");
+	assert(UnicodeProgressBar(200, 100, 10).text == "[██████████]");
 }
 
 @safe pure unittest {

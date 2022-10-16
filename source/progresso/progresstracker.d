@@ -51,7 +51,7 @@ struct ProgressTracker {
 	void setItemMaximum(size_t id, ulong amount) @safe pure
 		in(id in items, "Progress item not found")
 	{
-		items[id].bar.max = amount;
+		items[id].bar.maximum = amount;
 		updateTotal();
 	}
 	void setItemProgress(size_t id, ulong amount) @safe pure
@@ -83,7 +83,7 @@ struct ProgressTracker {
 			active = remove(active, idx);
 			done ~= id;
 			items[id].bar.complete = true;
-			items[id].bar.current = items[id].bar.max;
+			items[id].bar.current = items[id].bar.maximum;
 		}
 		items[id].complete = true;
 		if (totalItemsOnly) {
@@ -100,7 +100,7 @@ struct ProgressTracker {
 			write(item.bar);
 			write(" ");
 			if (!hideProgress) {
-				write(item.bar.current, "/", item.bar.max, " (");
+				write(item.bar.current, "/", item.bar.maximum, " (");
 			}
 			write(item.bar.percentage);
 			if (!hideProgress) {
@@ -131,20 +131,20 @@ struct ProgressTracker {
 		}
 	}
 	private void updateTotal() @safe pure {
-		total.bar.max = 0;
+		total.bar.maximum = 0;
 		total.bar.current = 0;
 		foreach (const item; items) {
 			if (totalItemsOnly) {
-				total.bar.max++;
+				total.bar.maximum++;
 				if (item.complete) {
 					total.bar.current++;
 				}
 			} else {
-				total.bar.max += item.bar.max;
+				total.bar.maximum += item.bar.maximum;
 				total.bar.current += item.bar.current;
 			}
 		}
-		if (total.bar.current == total.bar.max) {
+		if (total.bar.current == total.bar.maximum) {
 			total.status = "Complete";
 		}
 	}
