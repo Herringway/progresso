@@ -3,12 +3,19 @@ module progresso.progresstracker;
 public import magicalrainbows : RGB = RGB888;
 import progresso.bars;
 
+enum ProgressUnit {
+	none,
+	bytes
+}
+
 private struct ProgressItem {
 	string name;
 	string status;
 	UnicodeProgressBar2 bar;
 	bool complete;
+	ProgressUnit units;
 }
+
 
 struct ProgressTracker {
 	private ProgressItem[size_t] items;
@@ -92,7 +99,7 @@ struct ProgressTracker {
 		updateTotal();
 	}
 	void updateDisplay() @safe {
-		import std.stdio : write, writeln;
+		import std.stdio : write, writef, writeln;
 		void printBar(const ProgressItem item, bool advance, bool hideProgress) {
 			if (advance) {
 				rewindAmount++;
@@ -100,7 +107,14 @@ struct ProgressTracker {
 			write(item.bar);
 			write(" ");
 			if (!hideProgress) {
-				write(item.bar.current, "/", item.bar.maximum, " (");
+				final switch (item.units) {
+					case ProgressUnit.none:
+						write(item.bar.current, "/", item.bar.maximum, " (");
+						break;
+					case ProgressUnit.bytes:
+						writef!"%s/%s ("(PrettyBytesPrinter(item.bar.current), PrettyBytesPrinter(item.bar.maximum));
+						break;
+				}
 			}
 			write(item.bar.percentage);
 			if (!hideProgress) {
@@ -163,6 +177,32 @@ struct ProgressTracker {
 		items[idx].bar.to = to;
 		items[idx].bar.colourMode = mode;
 	}
+}
+
+struct PrettyBytesPrinter {
+	ulong amount;
+	private static immutable unitPrefixes = ["K", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q"];
+	void toString(S)(auto ref S sink) const {
+		import std.format : formattedWrite;
+		import std.range : put;
+		double tmp = amount;
+		uint prefix = 0;
+		while (tmp >= 1024) {
+			tmp /= 1024;
+			prefix++;
+		}
+		sink.formattedWrite!"%.0f"(tmp);
+		if (prefix > 0) {
+			put(sink, unitPrefixes[prefix - 1]);
+			put(sink, "i");
+		}
+		put(sink, "B");
+	}
+}
+@safe pure unittest {
+	import std.conv : text;
+	assert(PrettyBytesPrinter(1023).text == "1023B");
+	assert(PrettyBytesPrinter(1024).text == "1KiB");
 }
 
 private void demo() {
