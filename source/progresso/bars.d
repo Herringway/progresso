@@ -13,6 +13,40 @@ private void printPercentage(S)(auto ref S sink, ulong current, ulong max) {
 	sink.formattedWrite!"%02.2f%%"((cast(double)current / cast(double)max) * 100.0);
 }
 
+/// Support for native controls, such as external taskbar/tab/etc progress indicators. Not visible in terminal.
+struct NativeProgressBar {
+	enum State {
+		none = 0,
+		complete = 0,
+		progressing = 1,
+		error = 2,
+		indeterminate = 3,
+		paused = 4,
+	}
+	ulong current;
+	ulong maximum;
+	State state;
+	void toString(S)(auto ref S sink) const {
+		import std.format : formattedWrite;
+		sink.formattedWrite!"\x1B]9;4;%s;%s\x07"(cast(uint)state, cast(uint)(current / cast(double)maximum * 100.0));
+	}
+	static void demo()() {
+		import core.thread : Thread;
+		NativeProgressBar bar;
+		bar.maximum = 100;
+		bar.state = NativeProgressBar.State.progressing;
+		scope(exit) {
+			bar.state = NativeProgressBar.State.complete;
+			write(bar);
+		}
+		foreach (i; 0 .. 101) {
+			bar.current = i;
+			write(bar);
+			Thread.sleep(50.msecs);
+		}
+	}
+}
+
 struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar unknownChar, dchar[] characters) {
 	import magicalrainbows;
 	ulong current;
