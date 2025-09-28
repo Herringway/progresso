@@ -13,7 +13,7 @@ private struct ProgressItem {
 	string status;
 	UnicodeProgressBar2 bar;
 	bool complete;
-	ProgressUnit units;
+	ProgressUnit unit;
 }
 
 
@@ -49,6 +49,11 @@ struct ProgressTracker {
 		in(id in items, "Progress item not found")
 	{
 		items[id].status = status;
+	}
+	void setItemUnits(size_t id, ProgressUnit unit) @safe pure
+		in(id in items, "Progress item not found")
+	{
+		items[id].unit = unit;
 	}
 	void setItemName(size_t id, string name) @safe pure
 		in(id in items, "Progress item not found")
@@ -107,7 +112,7 @@ struct ProgressTracker {
 			write(item.bar);
 			write(" ");
 			if (!hideProgress) {
-				final switch (item.units) {
+				final switch (item.unit) {
 					case ProgressUnit.none:
 						write(item.bar.current, "/", item.bar.maximum, " (");
 						break;
