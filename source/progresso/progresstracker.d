@@ -1,7 +1,9 @@
 module progresso.progresstracker;
 
 public import magicalrainbows : RGB = RGB888;
+import std.datetime;
 import std.exception;
+import std.typecons;
 import progresso.bars;
 
 enum ProgressUnit {
@@ -28,6 +30,8 @@ struct ProgressTracker {
 	bool totalItemsOnly;
 	private ProgressItem total = { name: "Total", bar: { width: 10, showPercentage: false } };
 	private uint rewindAmount;
+	Nullable!Duration minimumUpdateWait;
+	Nullable!SysTime nextUpdate;
 	void addNewItem(size_t id) @safe pure {
 		auto item = ProgressItem();
 		item.bar.width = 10;
@@ -104,8 +108,15 @@ struct ProgressTracker {
 		}
 		updateTotal();
 	}
-	void updateDisplay() @safe {
+	void updateDisplay(bool force = false) @safe {
 		import std.stdio : write, writef, writeln;
+		if (!force && !minimumUpdateWait.isNull) {
+			auto now = Clock.currTime();
+			if (nextUpdate.get(now) > now) {
+				return;
+			}
+			nextUpdate = now + minimumUpdateWait.get();
+		}
 		if (!isValidConsole()) {
 			return;
 		}
@@ -223,11 +234,11 @@ struct PrettyBytesPrinter {
 
 private void demo()() {
 	import core.thread;
-	import core.time;
 	import std.range : repeat;
 	import std.format : format;
 	ProgressTracker tracker;
 	tracker.showTotal = true;
+	tracker.minimumUpdateWait = 1.seconds / 15;
 	foreach (i; 0 .. 100) {
 		tracker.addNewItem(i);
 		tracker.setItemName(i, format!"%s %-(%s %) long"(i, "very".repeat(200)));
@@ -250,6 +261,7 @@ private void demo()() {
 			Thread.sleep(1.msecs);
 		}
 	}
+	tracker.updateDisplay(true);
 }
 
 uint getConsoleWidth() @trusted {
