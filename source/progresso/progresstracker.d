@@ -1,6 +1,7 @@
 module progresso.progresstracker;
 
 public import magicalrainbows : RGB = RGB888;
+import std.exception;
 import progresso.bars;
 
 enum ProgressUnit {
@@ -105,6 +106,10 @@ struct ProgressTracker {
 	}
 	void updateDisplay() @safe {
 		import std.stdio : write, writef, writeln;
+		if (!isValidConsole()) {
+			return;
+		}
+		uint width = getConsoleWidth();
 		void printBar(const ProgressItem item, bool advance, bool hideProgress) {
 			if (advance) {
 				rewindAmount++;
@@ -125,7 +130,13 @@ struct ProgressTracker {
 			if (!hideProgress) {
 				write(")");
 			}
-			write(" - ", item.name);
+			write(" - ");
+			const charsLeft = width - getCursorPosition() - item.status.length - 3;
+			if (item.name.length > charsLeft) {
+				write(item.name[0 .. charsLeft - 3], "...");
+			} else {
+				write(item.name);
+			}
 			if (item.status != "") {
 				write(" (", item.status, ")");
 			}
@@ -210,19 +221,20 @@ struct PrettyBytesPrinter {
 	assert(PrettyBytesPrinter(1024).text == "1KiB");
 }
 
-private void demo() {
+private void demo()() {
 	import core.thread;
 	import core.time;
-	import std.conv : text;
+	import std.range : repeat;
+	import std.format : format;
 	ProgressTracker tracker;
 	tracker.showTotal = true;
 	foreach (i; 0 .. 100) {
 		tracker.addNewItem(i);
-		tracker.setItemName(i, i.text);
-		tracker.setItemMaximum(i, 100);
+		tracker.setItemName(i, format!"%s %-(%s %) long"(i, "very".repeat(200)));
+		tracker.setItemMaximum(i, 10);
 	}
 	foreach (i; 0 .. 10) {
-		foreach(id; 0 .. 10 * 100) {
+		foreach(id; 0 .. 10 * 10) {
 			const sid = ((i * 10) + (id % 10))	;
 			const progress = (id / 10) + 1;
 			tracker.addItemProgress(sid, 1);
@@ -230,12 +242,82 @@ private void demo() {
 			if (progress == 1) {
 				tracker.setItemActive(sid);
 			}
-			if (progress == 100) {
+			if (progress == 10) {
 				tracker.setItemStatus(sid, "Complete");
 				tracker.completeItem(sid);
 			}
 			tracker.updateDisplay();
-			//Thread.sleep(1.seconds / 60);
+			Thread.sleep(1.msecs);
 		}
+	}
+}
+
+uint getConsoleWidth() @trusted {
+	version(Windows) {
+		import core.sys.windows.winbase;
+		import core.sys.windows.wincon;
+		auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO info;
+		enforce(GetConsoleScreenBufferInfo(handle, &info), "Invalid console?");
+		return info.dwSize.X;
+	} else version(Posix) {
+		import core.sys.posix.sys.ioctl : ioctl, TIOCGWINSZ, winsize;
+		import std.stdio : File;
+		winsize ws;
+		auto file = File("/dev/tty", "r");
+		enforce(ioctl(file.fileno, TIOCGWINSZ, &ws) >= 0, "Failed getting terminal dimensions");
+
+		return ws.ws_col;
+	}
+}
+
+uint getCursorPosition() @trusted {
+	version(Windows) {
+		import core.sys.windows.winbase;
+		import core.sys.windows.wincon;
+		auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO info;
+		enforce(GetConsoleScreenBufferInfo(handle, &info), "Invalid console?");
+		return info.dwCursorPosition.X;
+	} else version(Posix) {
+		import std.algorithm.searching : findSplit;
+		import std.conv : to;
+		import core.sys.posix.termios;
+		import std.stdio : File, stdout;
+		stdout.flush(); // buffered input doesn't count towards cursor position
+		termios original, temp;
+		auto tty = File("/dev/tty", "r+");
+		tcgetattr(tty.fileno, &original);
+		tcgetattr(tty.fileno, &temp);
+	    temp.c_lflag &= ~(ICANON | ECHO);
+		tcsetattr(tty.fileno, TCSANOW, &temp);
+		scope(exit) tcsetattr(tty.fileno, TCSANOW, &original);
+		tty.write("\x1B[6n");
+		char[16] response = ' ';
+		ubyte pos;
+		foreach (ref c; response) {
+			char[1] tmp;
+			tty.rawRead(tmp);
+			if (tmp[0] == 'R') {
+				break;
+			}
+			c = tmp[0];
+		}
+		assert(response[0 .. 2] == "\x1B[", "Invalid response while querying cursor position");
+		return response[].findSplit(";")[2].findSplit(" ")[0].to!uint;
+	}
+}
+
+bool isValidConsole() @trusted {
+	version(Windows) {
+		import core.sys.windows.winbase;
+		import core.sys.windows.wincon;
+		auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO _;
+		return !!GetConsoleScreenBufferInfo(handle, &_);
+	} else version(Posix) {
+		import std.stdio : stdout;
+		import core.sys.posix.unistd : isatty;
+		return !!isatty(stdout.fileno);
 	}
 }
