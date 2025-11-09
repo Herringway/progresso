@@ -31,7 +31,7 @@ struct ProgressTracker {
 	private ProgressItem total = { name: "Total", bar: { width: 10, showPercentage: false } };
 	private uint rewindAmount;
 	Nullable!Duration minimumUpdateWait;
-	Nullable!SysTime nextUpdate;
+	Nullable!MonoTime nextUpdate;
 	void addNewItem(size_t id) @safe pure {
 		auto item = ProgressItem();
 		item.bar.width = 10;
@@ -111,7 +111,7 @@ struct ProgressTracker {
 	void updateDisplay(bool force = false) @safe {
 		import std.stdio : write, writef, writeln;
 		if (!force && !minimumUpdateWait.isNull) {
-			auto now = Clock.currTime();
+			auto now = MonoTime.currTime();
 			if (nextUpdate.get(now) > now) {
 				return;
 			}
