@@ -1,6 +1,6 @@
 module progresso.progresstracker;
 
-public import magicalrainbows : RGB = RGB888;
+public import pixelmancy : RGB = RGB888;
 import std.datetime;
 import std.exception;
 import std.typecons;

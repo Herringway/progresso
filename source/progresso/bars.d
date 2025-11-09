@@ -48,7 +48,8 @@ struct NativeProgressBar {
 }
 
 struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar unknownChar, dchar[] characters) {
-	import magicalrainbows;
+	import pixelmancy.colours.formats;
+	import pixelmancy.colours.gradient;
 	ulong current;
 	ulong maximum;
 	ulong width;

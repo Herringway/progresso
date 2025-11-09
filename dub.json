@@ -5,7 +5,7 @@
 	"copyright": "Copyright © 2022, Herringway",
 	"description": ".",
 	"dependencies": {
-		"magicalrainbows": "~>0.0"
+		"pixelmancy": "~>0.0"
 	},
 	"license": "BSL-1.0",
 	"name": "progresso"
