@@ -61,7 +61,7 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar unknownChar, 
 	void toString(S)(auto ref S sink) const {
 		import std.algorithm.comparison : clamp, min;
 		import std.format : formattedWrite;
-		import std.math : ceil, floor;
+		import std.math : ceil, floor, isNaN;
 		import std.range : popFrontN, put, repeat;
 		Gradient gradient;
 		if (colourMode == ColourMode.time) {
@@ -77,11 +77,13 @@ struct CharacterProgressBar(dchar leftChar, dchar rightChar, dchar unknownChar, 
 		if ((current > 0) && (maximum == 0)) {
 			put(sink, unknownChar.repeat(width));
 		} else {
-			const percentFilled = complete ? 1.0 : clamp(cast(double)current/cast(double)maximum, 0.0, 1.0);
+			const percentFilled = (maximum == 0) ? 0.0 : (complete ? 1.0 : clamp(cast(double)current/cast(double)maximum, 0.0, 1.0));
+			assert(!percentFilled.isNaN, "Invalid percentage");
 			const filled = cast(ulong)floor(width * percentFilled);
 			put(sink, characters[$ - 1].repeat(filled));
 			if (width > filled) {
-				const medFilled = (cast(double)width * cast(double)current/cast(double)maximum) % 1.0;
+				const medFilled = (maximum == 0) ? 0.0 : ((cast(double)width * cast(double)current/cast(double)maximum) % 1.0);
+				assert(!medFilled.isNaN, "Invalid percentage");
 				put(sink, characters[min(characters.length - 1, cast(size_t)floor(medFilled * characters.length))]);
 				put(sink, characters[0].repeat(width - filled - 1));
 			}
