@@ -143,7 +143,7 @@ struct ProgressTracker {
 			}
 			write(" - ");
 			const charsLeft = width - getCursorPosition() - item.status.length - 3;
-			if (item.name.length > charsLeft) {
+			if (item.name.length > charsLeft - 3) {
 				write(item.name[0 .. charsLeft - 3], "...");
 			} else {
 				write(item.name);
