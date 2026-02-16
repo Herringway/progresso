@@ -2,6 +2,7 @@ module progresso.progresstracker;
 
 public import pixelmancy : RGB = RGB888;
 import progresso.bars;
+import progresso.util;
 
 import std.algorithm.comparison;
 import std.algorithm.iteration;
