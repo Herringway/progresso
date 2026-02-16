@@ -1,14 +1,77 @@
 module progresso.util;
 
+import std.algorithm.comparison;
+import std.algorithm.iteration;
+import std.algorithm.searching;
 import std.conv;
 import std.exception;
+import std.format;
 import std.range;
+import std.string;
+import std.uni;
+
+package size_t terminalWidth(const dchar c) @safe pure {
+	return widthTable[c];
+}
+///
+@safe pure unittest {
+	assert('a'.terminalWidth == 1);
+	assert('🧀'.terminalWidth == 2);
+	assert('／'.terminalWidth == 2);
+}
+
+package size_t terminalWidth(const char[] str) @safe pure {
+	// we assume that combining marks don't contribute to character width. this may or may not be accurate
+	return str.byGrapheme.map!(x => x[0].terminalWidth).sum;
+}
+///
+@safe pure unittest {
+	assert("abc".terminalWidth == 3);
+	assert("🧀".terminalWidth == 2);
+	assert("🐈‍⬛".terminalWidth == 2);
+}
+
+package auto abbreviated(const char[] str, size_t maxLength) {
+	static struct Result {
+		const(char)[] str;
+		size_t maxLength;
+		private void __forceCompileCheck() const {
+			toString(nullSink);
+		}
+		void toString(S)(S sink) const {
+			enum abbrevString = "...";
+			if (str.terminalWidth > maxLength) {
+				if (maxLength >= abbrevString.length) {
+					long charsLeft = maxLength - abbrevString.length;
+					auto codePoints = str.byGrapheme.byCodePoint;
+					while (!codePoints.empty && (codePoints.front.terminalWidth <= charsLeft)) {
+						put(sink, codePoints.front);
+						charsLeft -= codePoints.front.terminalWidth;
+						codePoints.popFront();
+					}
+				}
+				put(sink, abbrevString[0 .. min(abbrevString.length, maxLength)]);
+			} else {
+				put(sink, str);
+			}
+		}
+	}
+	return Result(str, maxLength);
+}
+///
+@safe pure unittest {
+	assert("abc".abbreviated(4).text == "abc");
+	assert("abc".abbreviated(3).text == "abc");
+	assert("abc".abbreviated(0).text == "");
+	assert("🧀🧀🧀".abbreviated(3).text == "...");
+	assert("🧀🧀🧀🧀🧀".abbreviated(5).text == "🧀...");
+	assert("🧀🐈‍🧀🧀🧀".abbreviated(7).text == "🧀🐈...");
+}
 
 package struct PrettyBytesPrinter {
 	ulong amount;
 	private static immutable unitPrefixes = ["K", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q"];
 	void toString(S)(auto ref S sink) const {
-		import std.format : formattedWrite;
 		double tmp = amount;
 		uint prefix = 0;
 		while (tmp >= 1024) {
@@ -65,3 +128,26 @@ package bool isValidConsole() @trusted {
 		return !!isatty(stdout.fileno);
 	}
 }
+
+immutable widthTable = () {
+	ubyte[0x110000] width = 1;
+	foreach (line; import("EastAsianWidth.txt").lineSplitter) {
+		if (line.startsWith("#") || (line == "")) {
+			continue;
+		}
+		uint rangeEnd;
+		const hexSpec = singleSpec("%X");
+		uint rangeStart = unformatValue!uint(line, hexSpec);
+		if (line.startsWith("..")) {
+			line = line[2 .. $];
+			rangeEnd = unformatValue!uint(line, hexSpec);
+		} else {
+			rangeEnd = rangeStart;
+		}
+		auto eawPropSplit = line.findSplit("; ")[2].findSplit(" #")[0].strip;
+		if (eawPropSplit.among("W", "F")) {
+			width[rangeStart .. rangeEnd + 1] = 2;
+		}
+	}
+	return width;
+} ();

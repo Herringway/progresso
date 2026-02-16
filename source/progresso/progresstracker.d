@@ -13,6 +13,7 @@ import std.range;
 import std.stdio;
 import std.string;
 import std.typecons;
+import std.uni;
 
 enum ProgressUnit {
 	none,
@@ -121,23 +122,21 @@ struct ProgressTracker {
 	}
 	auto printer(Bar = UnicodeProgressBar2)() const {
 		size_t _;
-		return printer!Bar(_, ulong.max);
+		return printer!Bar(_, long.max);
 	}
-	auto printer(Bar = UnicodeProgressBar2)(out size_t lines, ulong maxWidth) const {
+	auto printer(Bar = UnicodeProgressBar2)(out size_t lines, long maxWidth) const {
 		struct Printer {
 			private const ProgressItem total;
 			const Options options;
 			void toString(S)(auto ref S sink) const {
 				import std.format : formattedWrite;
-				import std.range : put, repeat;
-				import std.uni : byGrapheme;
 				bool shouldPrintNewline;
 				void printBar(const ProgressItem item, bool hideProgress, int depth, bool linesCount) {
 					size_t charCount;
 					struct CharCounter {
 						void put(const(char)[] text) {
 							static import std.range;
-							charCount += text.byGrapheme.walkLength;
+							charCount += text.terminalWidth;
 							std.range.put(sink, text);
 						}
 					}
@@ -164,8 +163,9 @@ struct ProgressTracker {
 						if (depth >= 1) {
 							charCounter.formattedWrite!"%-(%s%)"(indentation.repeat(depth));
 						}
-						charCounter.formattedWrite!"%s"(bar);
-						put(charCounter, " ");
+						// avoid counting the escape sequence
+						charCount += bar.width + 2;
+						sink.formattedWrite!"%s"(bar);
 						if (!hideProgress) {
 							final switch (item.unit) {
 								case ProgressUnit.hidden:
@@ -188,14 +188,11 @@ struct ProgressTracker {
 							}
 							put(charCounter, " -");
 						}
-						const maxLabelLength = maxWidth - charCount - item.status.length - 6;
-						if (item.name.length > maxLabelLength) {
-							sink.formattedWrite!" - %s..."(item.name[0 .. maxLabelLength]);
-						} else {
-							sink.formattedWrite!" - %s"(item.name);
-						}
+						const long maxLabelLength = maxWidth - charCount - 1 - !item.status.byGrapheme.empty * 6;
+						charCounter.formattedWrite!" %s"(item.name.abbreviated(maxLabelLength));
 						if (item.status != "") {
-							sink.formattedWrite!" (%s)"(item.status);
+							const long maxStatusLength = maxWidth - charCount - 3;
+							sink.formattedWrite!" (%s)"(item.status.abbreviated(maxStatusLength));
 						}
 					}
 					if (!item.isRoot) {
@@ -251,7 +248,6 @@ struct ProgressTracker {
 
 @safe pure unittest {
 	static void printerCompiles() {
-		import std.range : nullSink;
 		ProgressTracker.init.printer().toString(nullSink);
 	}
 	{
@@ -275,6 +271,21 @@ struct ProgressTracker {
 		assert(tracker.printer(unused, 42).text == "[          ] 0/1 (0.00%) - Super l01234...");
 		tracker.matching(1).subItems ~= ProgressItem(id: 1, maximum: 1, state: ProgressItemState.complete, name: "Super l01234567890123456789012345678901234567890g");
 		assert(tracker.printer(unused, 42).text == "[██████████] 1/1 (100.00%) - Super l012...\n    [██████████] 1/1 (100.00%) - Super ...");
+	}
+	{
+		ProgressTracker tracker;
+		tracker.addNewItem(ProgressItem(id: 1, maximum: 1, state: ProgressItemState.active, name: "Super l01234567890123456789012345678901234567890g", status: "very l01234567890123456789g"));
+		size_t unused;
+		assert(tracker.printer(unused, 42).text == "[          ] 0/1 (0.00%) - Super ... (...)");
+		tracker.matching(1).subItems ~= ProgressItem(id: 1, maximum: 1, state: ProgressItemState.complete, name: "Super l01234567890123456789012345678901234567890g", status: "very l01234567890123456789g");
+		assert(tracker.printer(unused, 42).text == "[██████████] 1/1 (100.00%) - Supe... (...)\n    [██████████] 1/1 (100.00%) - ... (...)");
+		assert(tracker.printer(unused, 90).text == "[██████████] 1/1 (100.00%) - Super l01234567890123456789012345678901234567890g (very l...)\n    [██████████] 1/1 (100.00%) - Super l01234567890123456789012345678901234567890g (ve...)");
+	}
+	{
+		ProgressTracker tracker;
+		tracker.addNewItem(ProgressItem(id: 1, maximum: 1, state: ProgressItemState.active, name: "🧀🧀🧀🧀🧀 l01234567890123456789012345678901234567890g"));
+		size_t unused;
+		assert(tracker.printer(unused, 42).text == "[          ] 0/1 (0.00%) - 🧀🧀🧀🧀🧀 l...");
 	}
 	{
 		ProgressTracker tracker;
