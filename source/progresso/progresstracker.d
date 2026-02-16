@@ -15,7 +15,8 @@ import std.typecons;
 
 enum ProgressUnit {
 	none,
-	bytes
+	bytes,
+	hidden,
 }
 
 enum ProgressItemState {
@@ -34,7 +35,7 @@ struct ProgressItem {
 	ulong width = 10;
 	ulong maximum;
 	ulong current;
-	bool showPercentage;
+	bool showPercentage = true;
 	ProgressUnit unit;
 	ColourMode colourMode;
 	RGB from;
@@ -142,7 +143,7 @@ struct ProgressTracker {
 						bar.colourMode = item.colourMode;
 						bar.from = item.from;
 						bar.to = item.to;
-						bar.showPercentage = item.showPercentage;
+						bar.showPercentage = false;
 						bar.complete = item.state == ProgressItemState.complete;
 
 						if (linesCount) {
@@ -160,17 +161,25 @@ struct ProgressTracker {
 						put(charCounter, " ");
 						if (!hideProgress) {
 							final switch (item.unit) {
+								case ProgressUnit.hidden:
+									break;
 								case ProgressUnit.none:
-									charCounter.formattedWrite!"%s/%s ("(bar.current, bar.maximum);
+									charCounter.formattedWrite!" %s/%s "(bar.current, bar.maximum);
 									break;
 								case ProgressUnit.bytes:
-									charCounter.formattedWrite!"%s/%s ("(PrettyBytesPrinter(bar.current), PrettyBytesPrinter(bar.maximum));
+									charCounter.formattedWrite!" %s/%s "(PrettyBytesPrinter(bar.current), PrettyBytesPrinter(bar.maximum));
 									break;
 							}
+							if (item.showPercentage) {
+								put(charCounter, "(");
+							}
 						}
-						charCounter.formattedWrite!"%s"(bar.percentage);
-						if (!hideProgress) {
-							put(charCounter, ")");
+						if (item.showPercentage) {
+							charCounter.formattedWrite!"%s"(bar.percentage);
+							if (!hideProgress) {
+								put(charCounter, ")");
+							}
+							put(charCounter, " -");
 						}
 						const maxLabelLength = maxWidth - charCount - item.status.length - 6;
 						if (item.name.length > maxLabelLength) {
