@@ -39,10 +39,18 @@ struct ProgressItem {
 	bool showPercentage = true;
 	ProgressUnit unit;
 	ColourMode colourMode;
+	alias colour = from;
 	RGB from;
 	RGB to;
 	private ubyte donePrinting;
 	private bool isRoot;
+	void setActive() @safe pure {
+		state = ProgressItemState.active;
+	}
+	void setComplete() @safe pure {
+		state = ProgressItemState.complete;
+		current = maximum;
+	}
 	ulong amount() const @safe pure {
 		if (state == ProgressItemState.complete) {
 			return total;
