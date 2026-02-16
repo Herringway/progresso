@@ -1,115 +1,100 @@
 module progresso.progresstracker;
 
 public import pixelmancy : RGB = RGB888;
+import progresso.bars;
+
+import std.algorithm.comparison;
+import std.algorithm.iteration;
+import std.conv;
 import std.datetime;
 import std.exception;
+import std.range;
+import std.stdio;
+import std.string;
 import std.typecons;
-import progresso.bars;
 
 enum ProgressUnit {
 	none,
 	bytes
 }
 
-private struct ProgressItem {
-	string name;
-	string status;
-	UnicodeProgressBar2 bar;
-	bool complete;
-	ProgressUnit unit;
+enum ProgressItemState {
+	inactive,
+	active,
+	failed,
+	complete,
 }
 
+struct ProgressItem {
+	ProgressItem[] subItems;
+	ProgressItemState state;
+	ulong id;
+	string name;
+	string status;
+	ulong width = 10;
+	ulong maximum;
+	ulong current;
+	bool showPercentage;
+	ProgressUnit unit;
+	ColourMode colourMode;
+	RGB from;
+	RGB to;
+	private ubyte donePrinting;
+	private bool isRoot;
+	ulong amount() const @safe pure {
+		if (state == ProgressItemState.complete) {
+			return total;
+		}
+		if (subItems != []) {
+			return subItems.filter!(x => x.state == ProgressItemState.complete).walkLength;
+		}
+		return current;
+	}
+	ulong total() const @safe pure {
+		if (subItems != []) {
+			return subItems.length;
+		}
+		return maximum;
+	}
+}
+
+ref inout(ProgressItem) matching(return inout ProgressItem[] items, ulong id) @safe pure {
+	foreach (ref item; items) {
+		if (item.id == id) {
+			return item;
+		}
+	}
+	throw new Exception("No match for "~id.text);
+}
 
 struct ProgressTracker {
-	private ProgressItem[size_t] items;
-	private size_t[] active;
-	private size_t[] done;
-	bool showTotal;
-	bool hideItemProgress;
-	bool hideTotalProgress;
-	bool totalItemsOnly;
-	private ProgressItem total = { name: "Total", bar: { width: 10, showPercentage: false } };
-	private uint rewindAmount;
-	Nullable!Duration minimumUpdateWait;
-	Nullable!MonoTime nextUpdate;
-	void addNewItem(size_t id) @safe pure {
-		auto item = ProgressItem();
-		item.bar.width = 10;
-		item.bar.showPercentage = false;
-		items[id] = item;
+	private static struct Options {
+		bool showTotal;
+		bool hideItemProgress;
+		bool hideTotalProgress;
+		bool totalItemsOnly;
+		Nullable!Duration minimumUpdateWait;
 	}
-	size_t addNewItem() @safe pure {
-		auto item = ProgressItem();
-		item.bar.width = 10;
-		item.bar.showPercentage = false;
-		foreach(id; 0 .. size_t.max) {
-			if (id !in items) {
-				items[id] = item;
-				return id;
-			}
-		}
-		assert(0);
+	private Options options;
+	private ProgressItem root = { name: "Total", isRoot: true };
+	private Nullable!MonoTime nextUpdate;
+	private size_t lastLinesPrinted;
+	ref bool showTotal() return @safe pure => options.showTotal;
+	ref bool hideItemProgress() return @safe pure => options.hideItemProgress;
+	ref bool hideTotalProgress() return @safe pure => options.hideTotalProgress;
+	ref bool totalItemsOnly() return @safe pure => options.totalItemsOnly;
+	ref auto minimumUpdateWait() return @safe pure => options.minimumUpdateWait;
+	ref ProgressItem addNewItem(ProgressItem newItem) @safe pure {
+		root.subItems ~= newItem;
+		return root.subItems[$ - 1];
 	}
-	void setItemStatus(size_t id, string status) @safe pure
-		in(id in items, "Progress item not found")
-	{
-		items[id].status = status;
-	}
-	void setItemUnits(size_t id, ProgressUnit unit) @safe pure
-		in(id in items, "Progress item not found")
-	{
-		items[id].unit = unit;
-	}
-	void setItemName(size_t id, string name) @safe pure
-		in(id in items, "Progress item not found")
-	{
-		items[id].name = name;
-	}
-	void setItemMaximum(size_t id, ulong amount) @safe pure
-		in(id in items, "Progress item not found")
-	{
-		items[id].bar.maximum = amount;
-		updateTotal();
-	}
-	void setItemProgress(size_t id, ulong amount) @safe pure
-		in(id in items, "Progress item not found")
-	{
-		items[id].bar.current = amount;
-		updateTotal();
-	}
-	void addItemProgress(size_t id, ulong amount) @safe pure
-		in(id in items, "Progress item not found")
-	{
-		items[id].bar.current += amount;
-		if (!totalItemsOnly) {
-			total.bar.current += amount;
-		}
-	}
-	void setItemActive(size_t id) @safe pure
-		in(id in items, "Progress item not found")
-	{
-		active ~= id;
-	}
-	void completeItem(size_t id) @safe pure
-		in(id in items, "Progress item not found")
-	{
-		import std.algorithm.mutation : remove;
-		import std.algorithm.searching : countUntil;
-		const idx = active.countUntil(id);
-		if (idx != -1) {
-			active = remove(active, idx);
-			done ~= id;
-			items[id].bar.complete = true;
-			items[id].bar.current = items[id].bar.maximum;
-		}
-		items[id].complete = true;
-		if (totalItemsOnly) {
-			total.bar.current++;
-		}
-		updateTotal();
+	auto ref matching(ulong id) @safe pure {
+		return root.subItems.matching(id);
 	}
 	void updateDisplay(bool force = false) @safe {
-		import std.stdio : write, writef, writeln;
+		if (!isValidConsole()) {
+			return;
+		}
 		if (!force && !minimumUpdateWait.isNull) {
 			auto now = MonoTime.currTime();
 			if (nextUpdate.get(now) > now) {
@@ -117,92 +102,170 @@ struct ProgressTracker {
 			}
 			nextUpdate = now + minimumUpdateWait.get();
 		}
-		if (!isValidConsole()) {
-			return;
+		updateBarState();
+		if (lastLinesPrinted > 0) { // rewind to start of "active" printing area
+			foreach (_; 0 .. lastLinesPrinted) {
+				write("\x1B[1F\x1B[K");
+			}
 		}
-		uint width = getConsoleWidth();
-		void printBar(const ProgressItem item, bool advance, bool hideProgress) {
-			if (advance) {
-				rewindAmount++;
-			}
-			write(item.bar);
-			write(" ");
-			if (!hideProgress) {
-				final switch (item.unit) {
-					case ProgressUnit.none:
-						write(item.bar.current, "/", item.bar.maximum, " (");
-						break;
-					case ProgressUnit.bytes:
-						writef!"%s/%s ("(PrettyBytesPrinter(item.bar.current), PrettyBytesPrinter(item.bar.maximum));
-						break;
-				}
-			}
-			write(item.bar.percentage);
-			if (!hideProgress) {
-				write(")");
-			}
-			write(" - ");
-			const charsLeft = width - getCursorPosition() - item.status.length - 3;
-			if (item.name.length > charsLeft - 3) {
-				write(item.name[0 .. charsLeft - 3], "...");
-			} else {
-				write(item.name);
-			}
-			if (item.status != "") {
-				write(" (", item.status, ")");
-			}
-			writeln();
+		const dimensions = getConsoleDimensions();
+		writeln(printer(lastLinesPrinted, dimensions.width));
+	}
+	auto printer(Bar = UnicodeProgressBar2)() const {
+		size_t _;
+		return printer!Bar(_, ulong.max);
+	}
+	auto printer(Bar = UnicodeProgressBar2)(out size_t lines, ulong maxWidth) const {
+		struct Printer {
+			private const ProgressItem total;
+			const Options options;
+			void toString(S)(auto ref S sink) const {
+				import std.format : formattedWrite;
+				import std.range : put, repeat;
+				import std.uni : byGrapheme;
+				bool shouldPrintNewline;
+				void printBar(const ProgressItem item, bool hideProgress, int depth, bool linesCount) {
+					size_t charCount;
+					struct CharCounter {
+						void put(const(char)[] text) {
+							static import std.range;
+							charCount += text.byGrapheme.walkLength;
+							std.range.put(sink, text);
+						}
+					}
+					void printActualBar() {
+						CharCounter charCounter;
+						Bar bar;
+						bar.current = item.amount;
+						bar.maximum = item.total;
+						bar.width = item.width;
+						bar.colourMode = item.colourMode;
+						bar.from = item.from;
+						bar.to = item.to;
+						bar.showPercentage = item.showPercentage;
+						bar.complete = item.state == ProgressItemState.complete;
 
-		}
-		if (rewindAmount > 0) {
-			foreach (_; 0 ..rewindAmount) {
-				write("\x1B[1F\x1B[2K");
-			}
-		}
-		rewindAmount = 0;
-		foreach (id; done) {
-			printBar(items[id], false, hideItemProgress);
-		}
-		done = [];
-		foreach (id; active) {
-			printBar(items[id], true, hideItemProgress);
-		}
-		if (showTotal) {
-			printBar(total, true, hideTotalProgress);
-		}
-	}
-	private void updateTotal() @safe pure {
-		total.bar.maximum = 0;
-		total.bar.current = 0;
-		foreach (const item; items) {
-			if (totalItemsOnly) {
-				total.bar.maximum++;
-				if (item.complete) {
-					total.bar.current++;
+						if (linesCount) {
+							lines++;
+						}
+						if (shouldPrintNewline) {
+							put(sink, "\n");
+						}
+						shouldPrintNewline = true;
+						enum indentation = "    ";
+						if (depth >= 1) {
+							charCounter.formattedWrite!"%-(%s%)"(indentation.repeat(depth));
+						}
+						charCounter.formattedWrite!"%s"(bar);
+						put(charCounter, " ");
+						if (!hideProgress) {
+							final switch (item.unit) {
+								case ProgressUnit.none:
+									charCounter.formattedWrite!"%s/%s ("(bar.current, bar.maximum);
+									break;
+								case ProgressUnit.bytes:
+									charCounter.formattedWrite!"%s/%s ("(PrettyBytesPrinter(bar.current), PrettyBytesPrinter(bar.maximum));
+									break;
+							}
+						}
+						charCounter.formattedWrite!"%s"(bar.percentage);
+						if (!hideProgress) {
+							put(charCounter, ")");
+						}
+						const maxLabelLength = maxWidth - charCount - item.status.length - 6;
+						if (item.name.length > maxLabelLength) {
+							sink.formattedWrite!" - %s..."(item.name[0 .. maxLabelLength]);
+						} else {
+							sink.formattedWrite!" - %s"(item.name);
+						}
+						if (item.status != "") {
+							sink.formattedWrite!" (%s)"(item.status);
+						}
+					}
+					if (!item.isRoot) {
+						printActualBar();
+					}
+					foreach (subItem; item.subItems) {
+						if ((subItem.donePrinting == 2) && subItem.subItems.length) {
+							continue;
+						}
+						if (subItem.state == ProgressItemState.complete) {
+							printBar(subItem, hideProgress, depth + 1, !subItem.donePrinting && !item.donePrinting);
+						}
+					}
+					foreach (subItem; item.subItems) {
+						if (subItem.state == ProgressItemState.active) {
+							printBar(subItem, hideProgress, depth + 1, !subItem.donePrinting && !item.donePrinting);
+						}
+					}
+					if (item.isRoot && options.showTotal) {
+						printActualBar();
+					}
 				}
-			} else {
-				total.bar.maximum += item.bar.maximum;
-				total.bar.current += item.bar.current;
+				printBar(total, options.hideItemProgress, -1, total.donePrinting != 1);
 			}
 		}
-		if (total.bar.current == total.bar.maximum) {
-			total.status = "Complete";
+		return Printer(root, options);
+	}
+	private void updateBarState() @safe pure {
+		void updateItems(ref ProgressItem item) {
+			foreach (ref subItem; item.subItems) {
+				updateItems(subItem);
+				if (item.subItems.length && (item.state == ProgressItemState.complete)) {
+					item.current++;
+				}
+			}
+			if (item.donePrinting == 1) {
+				item.donePrinting++;
+			}
+			if ((item.state == ProgressItemState.complete) && !item.donePrinting && item.subItems.length) {
+				item.donePrinting++;
+			}
+			if (item.subItems.length) {
+				item.maximum = item.subItems.length;
+				if (item.amount == item.total) {
+					item.state = ProgressItemState.complete;
+					item.status = "Complete";
+				}
+			}
 		}
+		updateItems(root);
 	}
-	void clear() @safe pure {
-		items = null;
-		active = [];
-		done = [];
+}
+
+@safe pure unittest {
+	static void printerCompiles() {
+		import std.range : nullSink;
+		ProgressTracker.init.printer().toString(nullSink);
 	}
-	void setTotalColours(RGB from, RGB to, ColourMode mode = ColourMode.time) @safe pure {
-		total.bar.from = from;
-		total.bar.to = to;
-		total.bar.colourMode = mode;
+	{
+		ProgressTracker tracker;
+		tracker.addNewItem(ProgressItem(id: 1, maximum: 1, state: ProgressItemState.active, name: "Test"));
+		assert(tracker.printer().text == "[          ] 0/1 (0.00%) - Test");
+		tracker.matching(1).state = ProgressItemState.complete;
+		assert(tracker.printer().text == "[██████████] 1/1 (100.00%) - Test");
 	}
-	void setItemColours(size_t idx, RGB from, RGB to, ColourMode mode = ColourMode.time) @safe pure {
-		items[idx].bar.from = from;
-		items[idx].bar.to = to;
-		items[idx].bar.colourMode = mode;
+	{
+		ProgressTracker tracker;
+		tracker.addNewItem(ProgressItem(id: 1, maximum: 1024, state: ProgressItemState.active, unit: ProgressUnit.bytes,  name: "Test"));
+		assert(tracker.printer().text == "[          ] 0B/1KiB (0.00%) - Test");
+		tracker.matching(1).state = ProgressItemState.complete;
+		assert(tracker.printer().text == "[██████████] 1KiB/1KiB (100.00%) - Test");
+	}
+	{
+		ProgressTracker tracker;
+		tracker.addNewItem(ProgressItem(id: 1, maximum: 1, state: ProgressItemState.active, name: "Super l01234567890123456789012345678901234567890g"));
+		size_t unused;
+		assert(tracker.printer(unused, 42).text == "[          ] 0/1 (0.00%) - Super l01234...");
+		tracker.matching(1).subItems ~= ProgressItem(id: 1, maximum: 1, state: ProgressItemState.complete, name: "Super l01234567890123456789012345678901234567890g");
+		assert(tracker.printer(unused, 42).text == "[██████████] 1/1 (100.00%) - Super l012...\n    [██████████] 1/1 (100.00%) - Super ...");
+	}
+	{
+		ProgressTracker tracker;
+		tracker.addNewItem(ProgressItem(id: 1, maximum: 1, state: ProgressItemState.active, name: "Test", subItems: [ProgressItem (id: 1, maximum: 1, name: "Subitem test", state: ProgressItemState.active)]));
+		assert(tracker.printer().text == "[          ] 0/1 (0.00%) - Test\n    [          ] 0/1 (0.00%) - Subitem test");
+		tracker.matching(1).subItems.matching(1).state = ProgressItemState.complete;
+		assert(tracker.printer().text == "[██████████] 1/1 (100.00%) - Test\n    [██████████] 1/1 (100.00%) - Subitem test");
 	}
 }
 
@@ -227,51 +290,64 @@ struct PrettyBytesPrinter {
 	}
 }
 @safe pure unittest {
-	import std.conv : text;
 	assert(PrettyBytesPrinter(1023).text == "1023B");
 	assert(PrettyBytesPrinter(1024).text == "1KiB");
 }
 
 private void demo()() {
 	import core.thread;
-	import std.range : repeat;
-	import std.format : format;
+	import core.time;
 	ProgressTracker tracker;
 	tracker.showTotal = true;
 	tracker.minimumUpdateWait = 1.seconds / 15;
-	foreach (i; 0 .. 100) {
-		tracker.addNewItem(i);
-		tracker.setItemName(i, format!"%s %-(%s %) long"(i, "very".repeat(200)));
-		tracker.setItemMaximum(i, 10);
+	enum maxProgress = 10;
+	enum topLevelItems = 10;
+	enum subItemCount = 4;
+	foreach (i; 0 .. topLevelItems) {
+		auto item = ProgressItem(id: i, name: text("top item ", i), maximum: subItemCount);
+		foreach (j; 0 .. subItemCount) {
+			item.subItems ~= ProgressItem(id: j, name: text("sub item ", j), maximum: maxProgress);
+		}
+		tracker.addNewItem(item);
 	}
-	foreach (i; 0 .. 10) {
-		foreach(id; 0 .. 10 * 10) {
-			const sid = ((i * 10) + (id % 10))	;
-			const progress = (id / 10) + 1;
-			tracker.addItemProgress(sid, 1);
-			tracker.setItemStatus(sid, "Processing");
-			if (progress == 1) {
-				tracker.setItemActive(sid);
+	foreach (topLevelID; 0 .. topLevelItems) with(tracker.matching(topLevelID)) {
+		state = ProgressItemState.active;
+		status = "doing sub-stuff";
+		foreach (subID; 0 .. subItemCount) with(subItems.matching(subID)) {
+			foreach (progress; 0 .. maxProgress + 1) {
+				current = progress;
+				if (progress == maxProgress) {
+					state = ProgressItemState.complete;
+					status = "complete";
+				} else {
+					state = ProgressItemState.active;
+					status = "doing stuff";
+				}
+				tracker.updateDisplay();
+				//Thread.sleep(1.seconds / 60);
 			}
-			if (progress == 10) {
-				tracker.setItemStatus(sid, "Complete");
-				tracker.completeItem(sid);
-			}
-			tracker.updateDisplay();
-			Thread.sleep(1.msecs);
 		}
 	}
 	tracker.updateDisplay(true);
 }
 
-uint getConsoleWidth() @trusted {
+debug(rundemo) unittest {
+	demo();
+}
+
+auto getConsoleDimensions() @trusted {
+	static struct Result {
+		uint width;
+		uint height;
+	}
+
 	version(Windows) {
 		import core.sys.windows.winbase;
 		import core.sys.windows.wincon;
 		auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
 		CONSOLE_SCREEN_BUFFER_INFO info;
 		enforce(GetConsoleScreenBufferInfo(handle, &info), "Invalid console?");
-		return info.dwSize.X;
+		return Result(info.dwSize.X, info.dwSize.Y);
 	} else version(Posix) {
 		import core.sys.posix.sys.ioctl : ioctl, TIOCGWINSZ, winsize;
 		import std.stdio : File;
@@ -279,44 +355,7 @@ uint getConsoleWidth() @trusted {
 		auto file = File("/dev/tty", "r");
 		enforce(ioctl(file.fileno, TIOCGWINSZ, &ws) >= 0, "Failed getting terminal dimensions");
 
-		return ws.ws_col;
-	}
-}
-
-uint getCursorPosition() @trusted {
-	version(Windows) {
-		import core.sys.windows.winbase;
-		import core.sys.windows.wincon;
-		auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
-		CONSOLE_SCREEN_BUFFER_INFO info;
-		enforce(GetConsoleScreenBufferInfo(handle, &info), "Invalid console?");
-		return info.dwCursorPosition.X;
-	} else version(Posix) {
-		import std.algorithm.searching : findSplit;
-		import std.conv : to;
-		import core.sys.posix.termios;
-		import std.stdio : File, stdout;
-		stdout.flush(); // buffered input doesn't count towards cursor position
-		termios original, temp;
-		auto tty = File("/dev/tty", "r+");
-		tcgetattr(tty.fileno, &original);
-		tcgetattr(tty.fileno, &temp);
-	    temp.c_lflag &= ~(ICANON | ECHO);
-		tcsetattr(tty.fileno, TCSANOW, &temp);
-		scope(exit) tcsetattr(tty.fileno, TCSANOW, &original);
-		tty.write("\x1B[6n");
-		char[16] response = ' ';
-		ubyte pos;
-		foreach (ref c; response) {
-			char[1] tmp;
-			tty.rawRead(tmp);
-			if (tmp[0] == 'R') {
-				break;
-			}
-			c = tmp[0];
-		}
-		assert(response[0 .. 2] == "\x1B[", "Invalid response while querying cursor position");
-		return response[].findSplit(";")[2].findSplit(" ")[0].to!uint;
+		return Result(ws.ws_col, ws.ws_row);
 	}
 }
 
