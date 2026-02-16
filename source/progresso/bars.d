@@ -130,6 +130,7 @@ alias AsciiProgressBar = CharacterProgressBar!('[', ']', '?', [' ', '#']);
 	assert(AsciiProgressBar(0, 10, 10).text == "[          ]");
 	assert(AsciiProgressBar(10, 10, 10).text == "[##########]");
 	assert(AsciiProgressBar(5, 10, 10).text == "[#####     ]");
+	assert(AsciiProgressBar(0, 0, 10).text == "[          ]");
 }
 
 @safe pure unittest {
