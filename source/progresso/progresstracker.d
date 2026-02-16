@@ -66,15 +66,18 @@ struct ProgressItem {
 		}
 		return maximum;
 	}
-}
-
-ref inout(ProgressItem) matching(return inout ProgressItem[] items, ulong id) @safe pure {
-	foreach (ref item; items) {
-		if (item.id == id) {
-			return item;
+	ref inout(ProgressItem) matching(ulong id) return inout @safe pure {
+		foreach (ref item; subItems) {
+			if (item.id == id) {
+				return item;
+			}
 		}
+		throw new Exception("No match for "~id.text);
 	}
-	throw new Exception("No match for "~id.text);
+	ref auto addNewItem(ProgressItem newItem) @safe pure {
+		subItems ~= newItem;
+		return subItems[$ - 1];
+	}
 }
 
 struct ProgressTracker {
@@ -85,8 +88,8 @@ struct ProgressTracker {
 		bool totalItemsOnly;
 		Nullable!Duration minimumUpdateWait;
 	}
+	ProgressItem root = { name: "Total", isRoot: true };
 	private Options options;
-	private ProgressItem root = { name: "Total", isRoot: true };
 	private Nullable!MonoTime nextUpdate;
 	private size_t lastLinesPrinted;
 	ref auto showTotal() => options.showTotal;
@@ -94,13 +97,8 @@ struct ProgressTracker {
 	ref auto hideTotalProgress() => options.hideTotalProgress;
 	ref auto totalItemsOnly() => options.totalItemsOnly;
 	ref auto minimumUpdateWait() => options.minimumUpdateWait;
-	ref ProgressItem addNewItem(ProgressItem newItem) @safe pure {
-		root.subItems ~= newItem;
-		return root.subItems[$ - 1];
-	}
-	auto ref matching(ulong id) @safe pure {
-		return root.subItems.matching(id);
-	}
+	ref auto addNewItem(ProgressItem newItem) @safe pure => root.addNewItem(newItem);
+	auto ref matching(ulong id) @safe pure => root.matching(id);
 	void updateDisplay(bool force = false) @safe {
 		if (!isValidConsole()) {
 			return;
@@ -282,7 +280,7 @@ struct ProgressTracker {
 		ProgressTracker tracker;
 		tracker.addNewItem(ProgressItem(id: 1, maximum: 1, state: ProgressItemState.active, name: "Test", subItems: [ProgressItem (id: 1, maximum: 1, name: "Subitem test", state: ProgressItemState.active)]));
 		assert(tracker.printer().text == "[          ] 0/1 (0.00%) - Test\n    [          ] 0/1 (0.00%) - Subitem test");
-		tracker.matching(1).subItems.matching(1).state = ProgressItemState.complete;
+		tracker.matching(1).matching(1).state = ProgressItemState.complete;
 		assert(tracker.printer().text == "[██████████] 1/1 (100.00%) - Test\n    [██████████] 1/1 (100.00%) - Subitem test");
 	}
 }
@@ -306,7 +304,7 @@ private void demo()() {
 	foreach (topLevelID; 0 .. topLevelItems) with(tracker.matching(topLevelID)) {
 		state = ProgressItemState.active;
 		status = "doing sub-stuff";
-		foreach (subID; 0 .. subItemCount) with(subItems.matching(subID)) {
+		foreach (subID; 0 .. subItemCount) with(matching(subID)) {
 			foreach (progress; 0 .. maxProgress + 1) {
 				current = progress;
 				if (progress == maxProgress) {
