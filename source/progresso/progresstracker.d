@@ -79,11 +79,11 @@ struct ProgressTracker {
 	private ProgressItem root = { name: "Total", isRoot: true };
 	private Nullable!MonoTime nextUpdate;
 	private size_t lastLinesPrinted;
-	ref bool showTotal() return @safe pure => options.showTotal;
-	ref bool hideItemProgress() return @safe pure => options.hideItemProgress;
-	ref bool hideTotalProgress() return @safe pure => options.hideTotalProgress;
-	ref bool totalItemsOnly() return @safe pure => options.totalItemsOnly;
-	ref auto minimumUpdateWait() return @safe pure => options.minimumUpdateWait;
+	ref auto showTotal() => options.showTotal;
+	ref auto hideItemProgress() => options.hideItemProgress;
+	ref auto hideTotalProgress() => options.hideTotalProgress;
+	ref auto totalItemsOnly() => options.totalItemsOnly;
+	ref auto minimumUpdateWait() => options.minimumUpdateWait;
 	ref ProgressItem addNewItem(ProgressItem newItem) @safe pure {
 		root.subItems ~= newItem;
 		return root.subItems[$ - 1];
