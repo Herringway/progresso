@@ -75,9 +75,8 @@ struct ProgressItem {
 		}
 		throw new Exception("No match for "~id.text);
 	}
-	ref auto addNewItem(ProgressItem newItem) @safe pure {
+	void addNewItem(ProgressItem newItem) @safe pure {
 		subItems ~= newItem;
-		return subItems[$ - 1];
 	}
 }
 
@@ -98,7 +97,7 @@ struct ProgressTracker {
 	ref auto hideTotalProgress() => options.hideTotalProgress;
 	ref auto totalItemsOnly() => options.totalItemsOnly;
 	ref auto minimumUpdateWait() => options.minimumUpdateWait;
-	ref auto addNewItem(ProgressItem newItem) @safe pure => root.addNewItem(newItem);
+	void addNewItem(ProgressItem newItem) @safe pure => root.addNewItem(newItem);
 	auto ref matching(ulong id) @safe pure => root.matching(id);
 	void updateDisplay(bool force = false) @safe {
 		if (!isValidConsole()) {
