@@ -117,7 +117,10 @@ struct ProgressTracker {
 			}
 		}
 		const dimensions = getConsoleDimensions();
-		writeln(printer(lastLinesPrinted, dimensions.width));
+		write(printer(lastLinesPrinted, dimensions.width));
+		if (lastLinesPrinted > 0) {
+			writeln();
+		}
 	}
 	auto printer(Bar = UnicodeProgressBar2)() const {
 		size_t _;
