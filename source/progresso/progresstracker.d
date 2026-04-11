@@ -197,23 +197,17 @@ struct ProgressTracker {
 							sink.formattedWrite!" (%s)"(item.status.abbreviated(maxStatusLength));
 						}
 					}
-					if (!item.isRoot) {
-						printActualBar();
-					}
 					foreach (subItem; item.subItems) {
-						if ((subItem.donePrinting == 2) && subItem.subItems.length) {
-							continue;
-						}
-						if (subItem.state == ProgressItemState.complete) {
-							printBar(subItem, hideProgress, depth + 1, !subItem.donePrinting && !item.donePrinting);
+						if ((subItem.donePrinting != 2) && (subItem.state == ProgressItemState.complete)) {
+							printBar(subItem, hideProgress, depth + 1, !subItem.donePrinting);
 						}
 					}
 					foreach (subItem; item.subItems) {
 						if (subItem.state == ProgressItemState.active) {
-							printBar(subItem, hideProgress, depth + 1, !subItem.donePrinting && !item.donePrinting);
+							printBar(subItem, hideProgress, depth + 1, !subItem.donePrinting);
 						}
 					}
-					if (item.isRoot && options.showTotal) {
+					if (!item.isRoot || options.showTotal) {
 						printActualBar();
 					}
 				}
@@ -233,7 +227,7 @@ struct ProgressTracker {
 			if (item.donePrinting == 1) {
 				item.donePrinting++;
 			}
-			if ((item.state == ProgressItemState.complete) && !item.donePrinting && item.subItems.length) {
+			if ((item.state == ProgressItemState.complete) && !item.donePrinting) {
 				item.donePrinting++;
 			}
 			if (item.subItems.length) {
@@ -272,7 +266,7 @@ struct ProgressTracker {
 		size_t unused;
 		assert(tracker.printer(unused, 42).text == "[          ] 0/1 (0.00%) - Super l01234...");
 		tracker.matching(1).subItems ~= ProgressItem(id: 1, maximum: 1, state: ProgressItemState.complete, name: "Super l01234567890123456789012345678901234567890g");
-		assert(tracker.printer(unused, 42).text == "[██████████] 1/1 (100.00%) - Super l012...\n    [██████████] 1/1 (100.00%) - Super ...");
+		assert(tracker.printer(unused, 42).text == "    [██████████] 1/1 (100.00%) - Super ...\n[██████████] 1/1 (100.00%) - Super l012...");
 	}
 	{
 		ProgressTracker tracker;
@@ -280,8 +274,8 @@ struct ProgressTracker {
 		size_t unused;
 		assert(tracker.printer(unused, 42).text == "[          ] 0/1 (0.00%) - Super ... (...)");
 		tracker.matching(1).subItems ~= ProgressItem(id: 1, maximum: 1, state: ProgressItemState.complete, name: "Super l01234567890123456789012345678901234567890g", status: "very l01234567890123456789g");
-		assert(tracker.printer(unused, 42).text == "[██████████] 1/1 (100.00%) - Supe... (...)\n    [██████████] 1/1 (100.00%) - ... (...)");
-		assert(tracker.printer(unused, 90).text == "[██████████] 1/1 (100.00%) - Super l01234567890123456789012345678901234567890g (very l...)\n    [██████████] 1/1 (100.00%) - Super l01234567890123456789012345678901234567890g (ve...)");
+		assert(tracker.printer(unused, 42).text == "    [██████████] 1/1 (100.00%) - ... (...)\n[██████████] 1/1 (100.00%) - Supe... (...)");
+		assert(tracker.printer(unused, 90).text == "    [██████████] 1/1 (100.00%) - Super l01234567890123456789012345678901234567890g (ve...)\n[██████████] 1/1 (100.00%) - Super l01234567890123456789012345678901234567890g (very l...)");
 	}
 	{
 		ProgressTracker tracker;
@@ -292,9 +286,9 @@ struct ProgressTracker {
 	{
 		ProgressTracker tracker;
 		tracker.addNewItem(ProgressItem(id: 1, maximum: 1, state: ProgressItemState.active, name: "Test", subItems: [ProgressItem (id: 1, maximum: 1, name: "Subitem test", state: ProgressItemState.active)]));
-		assert(tracker.printer().text == "[          ] 0/1 (0.00%) - Test\n    [          ] 0/1 (0.00%) - Subitem test");
+		assert(tracker.printer().text == "    [          ] 0/1 (0.00%) - Subitem test\n[          ] 0/1 (0.00%) - Test");
 		tracker.matching(1).matching(1).state = ProgressItemState.complete;
-		assert(tracker.printer().text == "[██████████] 1/1 (100.00%) - Test\n    [██████████] 1/1 (100.00%) - Subitem test");
+		assert(tracker.printer().text == "    [██████████] 1/1 (100.00%) - Subitem test\n[██████████] 1/1 (100.00%) - Test");
 	}
 }
 
@@ -308,7 +302,7 @@ private void demo()() {
 	enum topLevelItems = 10;
 	enum subItemCount = 4;
 	foreach (i; 0 .. topLevelItems) {
-		auto item = ProgressItem(id: i, name: text("top item ", i), maximum: subItemCount);
+		auto item = ProgressItem(id: i, name: text("top item ", i));
 		foreach (j; 0 .. subItemCount) {
 			item.subItems ~= ProgressItem(id: j, name: text("sub item ", j), maximum: maxProgress);
 		}
@@ -318,17 +312,16 @@ private void demo()() {
 		state = ProgressItemState.active;
 		status = "doing sub-stuff";
 		foreach (subID; 0 .. subItemCount) with(matching(subID)) {
+			state = ProgressItemState.active;
+			status = "doing stuff";
 			foreach (progress; 0 .. maxProgress + 1) {
 				current = progress;
 				if (progress == maxProgress) {
 					state = ProgressItemState.complete;
 					status = "complete";
-				} else {
-					state = ProgressItemState.active;
-					status = "doing stuff";
 				}
 				tracker.updateDisplay();
-				//Thread.sleep(1.seconds / 60);
+				Thread.sleep(1.seconds / 60);
 			}
 		}
 	}
