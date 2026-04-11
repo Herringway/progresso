@@ -56,13 +56,13 @@ struct ProgressItem {
 		if (state == ProgressItemState.complete) {
 			return total;
 		}
-		if (subItems != []) {
+		if (subItems.length) {
 			return subItems.filter!(x => x.state == ProgressItemState.complete).walkLength;
 		}
 		return current;
 	}
 	ulong total() const @safe pure {
-		if (subItems != []) {
+		if (subItems.length) {
 			return subItems.length;
 		}
 		return maximum;
