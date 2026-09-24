@@ -37,6 +37,7 @@ struct ProgressItem {
 	ulong width = 10;
 	ulong maximum;
 	ulong current;
+	bool indeterminateMaximum;
 	bool showPercentage = true;
 	ProgressUnit unit;
 	ColourMode colourMode;
@@ -230,7 +231,7 @@ struct ProgressTracker {
 			if ((item.state == ProgressItemState.complete) && !item.donePrinting) {
 				item.donePrinting++;
 			}
-			if (item.subItems.length) {
+			if (item.subItems.length && !item.indeterminateMaximum) {
 				item.maximum = item.subItems.length;
 				if (item.amount == item.total) {
 					item.state = ProgressItemState.complete;
